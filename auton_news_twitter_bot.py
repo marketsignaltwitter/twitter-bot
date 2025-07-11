@@ -1,4 +1,5 @@
-!pip install tweepy schedule requests python-dotenv
+from keep_alive import keep_alive
+keep_alive()
 
 import tweepy
 import schedule
@@ -10,23 +11,19 @@ from io import BytesIO
 import os
 from dotenv import load_dotenv
 
-# ========================
-# 🔒 Load from .env
-# ========================
 load_dotenv()
 
+# Twitter credentials
 BEARER_TOKEN = os.getenv("TWITTER_BEARER_TOKEN")
 CONSUMER_KEY = os.getenv("TWITTER_API_KEY")
 CONSUMER_SECRET = os.getenv("TWITTER_API_SECRET")
 ACCESS_TOKEN = os.getenv("TWITTER_ACCESS_TOKEN")
 ACCESS_TOKEN_SECRET = os.getenv("TWITTER_ACCESS_SECRET")
 
+# API Keys
 GNEWS_API_KEY = os.getenv("GNEWS_API_KEY")
 NEWSDATA_API_KEY = os.getenv("NEWSDATA_API_KEY")
 
-# ========================
-# 🐦 Tweepy Setup
-# ========================
 client = tweepy.Client(
     bearer_token=BEARER_TOKEN,
     consumer_key=CONSUMER_KEY,
@@ -39,24 +36,15 @@ client = tweepy.Client(
 auth = tweepy.OAuth1UserHandler(CONSUMER_KEY, CONSUMER_SECRET, ACCESS_TOKEN, ACCESS_TOKEN_SECRET)
 api_v1 = tweepy.API(auth)
 
-# ========================
-# 🧠 Keywords
-# ========================
 KEYWORDS = [
-    # Market Impact
     "IPO", "funding", "merger", "SEBI", "RBI", "budget", "acquisition", "layoffs",
     "valuation", "stock crash", "earnings", "quarterly result", "investor",
     "SoftBank", "Tiger Global", "BlackRock", "TCS", "Infosys", "market rally",
-    
-    # Tarif / Positive
     "record profit", "all-time high", "soars", "beats estimate", "strong earnings",
     "praised", "awarded", "recognized", "secured funding", "rising", "bullish",
     "expansion", "acquires", "backed by", "high demand", "investor interest"
 ]
 
-# ========================
-# 🖼️ Random Images
-# ========================
 IMAGES = [
     "https://images.unsplash.com/photo-1554224154-22dec7ec8818",
     "https://images.unsplash.com/photo-1612831190890-6f5cc84df012",
@@ -95,6 +83,18 @@ def contains_keyword(text):
     lower_text = text.lower()
     return any(keyword.lower() in lower_text for keyword in KEYWORDS)
 
+def is_new(title):
+    try:
+        with open("posted.txt", "r") as f:
+            posted = f.read().splitlines()
+            return title not in posted
+    except FileNotFoundError:
+        return True
+
+def save_title(title):
+    with open("posted.txt", "a") as f:
+        f.write(f"{title}\n")
+
 def fetch_from_gnews():
     try:
         print("🔍 Checking GNews...")
@@ -103,8 +103,9 @@ def fetch_from_gnews():
         articles = response.json().get("articles", [])
         for article in articles:
             title = article.get("title", "")
-            if contains_keyword(title):
+            if contains_keyword(title) and is_new(title):
                 link = article.get("url", "")
+                save_title(title)
                 return f"📢 {title}\n\n🔗 {link}\n\n#StockMarket #Startups #MarketSignalServices\n🕒 {datetime.utcnow().strftime('%H:%M UTC')}"
         return None
     except Exception as e:
@@ -119,8 +120,9 @@ def fetch_from_newsdata():
         articles = response.json().get("results", [])
         for article in articles:
             title = article.get("title", "")
-            if contains_keyword(title):
+            if contains_keyword(title) and is_new(title):
                 link = article.get("link", "")
+                save_title(title)
                 return f"📢 {title}\n\n🔗 {link}\n\n#StockMarket #Startups #MarketSignalServices\n🕒 {datetime.utcnow().strftime('%H:%M UTC')}"
         return None
     except Exception as e:
@@ -131,12 +133,8 @@ def fetch_market_moving_news():
     news = fetch_from_gnews()
     if news:
         return news
-
     news = fetch_from_newsdata()
-    if news:
-        return news
-
-    return None
+    return news
 
 def post_scheduled_tweet():
     try:
@@ -144,12 +142,9 @@ def post_scheduled_tweet():
         if not tweet_text:
             print("⚠️ No impactful news found.")
             return
-
         image_url = random.choice(IMAGES)
         print(f"📝 Tweet: {tweet_text[:100]}...")
-
         response = post_tweet_with_media(tweet_text, image_url)
-
         if response:
             print(f"✅ Tweet posted! ID: {response.data['id']}")
         else:
@@ -157,12 +152,9 @@ def post_scheduled_tweet():
     except Exception as e:
         print(f"❌ Error: {e}")
 
-# ========================
-# ⏰ Schedule
-# ========================
 schedule.every(30).minutes.do(post_scheduled_tweet)
 
-print("🤖 Smart Twitter Bot Started (Every 30 min)")
+print("🤖 Twitter bot started (every 30 min)")
 while True:
     schedule.run_pending()
     time.sleep(1)
