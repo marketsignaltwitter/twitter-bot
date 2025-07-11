@@ -1,0 +1,5 @@
+tweepy
+schedule
+python-dotenv
+requests
+flask
